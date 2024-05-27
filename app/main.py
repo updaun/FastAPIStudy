@@ -1,7 +1,12 @@
+from dataclasses import asdict
+
 import uvicorn
 from fastapi import FastAPI
 
-from app.common.config import conf
+from database.conn import db
+from common.config import conf
+from routes import index
+
 
 
 def create_app():
@@ -14,10 +19,15 @@ def create_app():
 
     app = FastAPI()
 
+    conf_dict = asdict(c)
+
     # 데이터베이스 이니셜라이즈
+    db.init_app(app, **conf_dict)
+
     # 레디스 이니셜라이즈
     # 미들웨어 정의
     # 라우터 정의
+    app.include_router(index.router)
 
     return app
 

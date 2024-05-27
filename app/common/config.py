@@ -20,6 +20,7 @@ class Config:
 @dataclass
 class LocalConfig(Config):
     PROJ_RELOAD: bool = True
+    DB_URL: str = "postgresql+psycopg2://devuser:password1234!@db/devdb"
 
 
 @dataclass
