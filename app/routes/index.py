@@ -11,16 +11,28 @@ router = APIRouter()
 
 
 @router.get("/")
-async def index(session: Session = Depends(db.session),):
+async def index(
+    session: Session = Depends(db.session),
+):
     """
     ELB 상태 체크용 API
     :return:
     """
-    user = Users(status="active", name="helloworld")
-    session.add(user)
-    session.commit()
 
-    Users().create(session, auto_commit=True, name="updaun")
+    # 유저 전체 삭제 (sqlalchemy ORM 사용)
+    # users = Users()
+    # users = session.query(Users).all()
+    # for user in users:
+    #     session.delete(user)
+    # session.commit()
+
+    # 유저 전체 조회 (sqlalchemy ORM 사용)
+    # users = Users()
+    # users = session.query(Users).all()
+    # for user in users:
+    #     print(user.email, user.pw)
 
     current_time = datetime.utcnow()
-    return Response(f"Notification API (UTC: {current_time.strftime('%Y.%m.%d %H:%M:%S')})")
+    return Response(
+        f"Notification API (UTC: {current_time.strftime('%Y.%m.%d %H:%M:%S')})"
+    )
