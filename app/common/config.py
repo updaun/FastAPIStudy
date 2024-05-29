@@ -10,22 +10,26 @@ class Config:
     """
     기본 Configuration
     """
+
     BASE_DIR = base_dir
 
     DB_POOL_RECYCLE: int = 900
     DB_ECHO: bool = True
 
 
-
 @dataclass
 class LocalConfig(Config):
     PROJ_RELOAD: bool = True
     DB_URL: str = "postgresql+psycopg2://devuser:password1234!@db/devdb"
+    TRUSTED_HOSTS = ["*"]
+    ALLOW_SITE = ["*"]
 
 
 @dataclass
 class ProdConfig(Config):
     PROJ_RELOAD: bool = False
+    TRUSTED_HOSTS = ["*"]
+    ALLOW_SITE = ["*"]
 
 
 def conf():
