@@ -5,6 +5,7 @@ import re
 import jwt
 
 from fastapi.params import Header
+from jwt.exceptions import ExpiredSignatureError, DecodeError
 from jwt import PyJWTError
 from pydantic import BaseModel
 from starlette.requests import Request
@@ -15,6 +16,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from common import config, consts
 from common.config import conf
+from errors import exceptions as ex
 from models import UserToken
 
 from utils.date_utils import D
@@ -53,33 +55,46 @@ class AccessControl:
         ):
             return await self.app(scope, receive, send)
 
-        if request.url.path.startswith("/api"):
-            # api 인경우 헤더로 토큰 검사
-            if "Authorization" in request.headers.keys():
-                request.state.user = await self.token_decode(
-                    access_token=request.headers.get("Authorization")
-                )
-                # 토큰 없음
-            else:
-                if "Authorization" not in request.headers.keys():
-                    response = JSONResponse(
-                        status_code=401, content=dict(msg="AUTHORIZATION_REQUIRED")
+        try:
+            if request.url.path.startswith("/api"):
+                # api 인경우 헤더로 토큰 검사
+                if "authorization" in request.headers.keys():
+                    token_info = await self.token_decode(
+                        access_token=request.headers.get("Authorization")
                     )
-                    return await response(scope, receive, send)
-        else:
+                    request.state.user = UserToken(**token_info)
+                    # 토큰 없음
+                else:
+                    if "Authorization" not in request.headers.keys():
+                        raise ex.NotAuthorized()
+            else:
+                # 템플릿 렌더링인 경우 쿠키에서 토큰 검사
+                request.cookies[
+                    "Authorization"
+                ] = "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZCI6MTQsImVtYWlsIjoia29hbGFAZGluZ3JyLmNvbSIsIm5hbWUiOm51bGwsInBob25lX251bWJlciI6bnVsbCwicHJvZmlsZV9pbWciOm51bGwsInNuc190eXBlIjpudWxsfQ.4vgrFvxgH8odoXMvV70BBqyqXOFa2NDQtzYkGywhV48"
 
-            if "Authorization" not in request.cookies.keys():
-                response = JSONResponse(
-                    status_code=401, content=dict(msg="AUTHORIZATION_REQUIRED")
+                if "Authorization" not in request.cookies.keys():
+                    raise ex.NotAuthorized()
+
+                token_info = await self.token_decode(
+                    access_token=request.cookies.get("Authorization")
                 )
-                return await response(scope, receive, send)
+                request.state.user = UserToken(**token_info)
 
-            request.state.user = await self.token_decode(
-                access_token=request.cookies.get("Authorization")
-            )
+            request.state.req_time = D.datetime()
+            print(D.datetime())
+            print(D.date())
+            print(D.date_num())
 
-        request.state.req_time = D.datetime()
-        res = await self.app(scope, receive, send)
+            print(request.cookies)
+            print(headers)
+            res = await self.app(scope, receive, send)
+        except ex.APIException as e:
+            res = await self.exception_handler(e)
+            res = await res(scope, receive, send)
+        finally:
+            # Logging
+            ...
         return res
 
     @staticmethod
@@ -100,7 +115,19 @@ class AccessControl:
             payload = jwt.decode(
                 access_token, key=consts.JWT_SECRET, algorithms=[consts.JWT_ALGORITHM]
             )
-        except PyJWTError as e:
-            print(e)
-            # Raise Error
+        except ExpiredSignatureError:
+            raise ex.TokenExpiredEx()
+        except DecodeError:
+            raise ex.TokenDecodeEx()
         return payload
+
+    @staticmethod
+    async def exception_handler(error: ex.APIException):
+        error_dict = dict(
+            status=error.status_code,
+            msg=error.msg,
+            detail=error.detail,
+            code=error.code,
+        )
+        res = JSONResponse(status_code=error.status_code, content=error_dict)
+        return res
